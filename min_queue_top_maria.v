@@ -1,6 +1,13 @@
 `timescale 1ns / 1ns
 
-module min_queue_top_hananel  #(parameter q_depth=1024, parameter ptr_wd=10) (
+`define IDLE 			3'd0
+`define START_PUSH		3'd1
+`define PUSH_HEAD   	3'd2
+`define NEXT_NODE  	    3'd3
+`define POP			    3'd4
+`define PUSH_MIDDLE		3'd5
+
+module min_queue_top  #(parameter q_depth=1024, parameter ptr_wd=10) (
 	input                             clk                           , // 
 	input                             rst_b                         , // 
 		     
@@ -40,6 +47,16 @@ module min_queue_top_hananel  #(parameter q_depth=1024, parameter ptr_wd=10) (
    // push_top
    // ram_manager
    // fifo_manager
+   
+   ram_manager ram_manager (
+		.clk 			(clk),
+		.rst_b			(rst_b),
+		.push_to_ram  	(push),
+		.record_to_push	(push_record),
+		.pop_from_ram	(pop),
+		.min_record 	(pop_record),
+		.min_valid		(min_valid)
+	);
   
    
 endmodule // min_queue_top
@@ -83,7 +100,7 @@ endmodule  // push_top
 			 
 			 
 			 
-module FIFO_manager (
+/* module FIFO_manager (
 input clk,
 input rst_b,
 
@@ -154,7 +171,7 @@ else begin
 	end
 	
 end
-
+ */
 
 
 
@@ -173,59 +190,7 @@ end
 	 		 
 endmodule // queue_in	
 
-module ram_manager (
-	input 		clk,
-	input 		rst_b,
-    output 		pop_from_fifo,				// when low signals the fifo_manager NOT to refresh the current fifo_pop_record. when high signals the fifo_manager to refresh the fifo_pop_record, which results with fifo_manager deleting the item at top of the queue and insert into pop_record the next item. the ram_manager will take care that the pop_from_fifo will be set to high for only 1 clock cycle. the reason it takes the pop_record, in the fifo_manager, one cycle to be refreshed after the pop_from_fifo was set to high. 
-	inout 		compare_queue,  // flag is set by ram_manager and by the fifo_manager. when set to high by the ram manager the fifo buffer goes over all of the items that have value smaller then the new min_val (after a pop occured in the ram_manager) and returns the number of pop commands that the ram_manager has to ask from the fifo manager (num_of_items_to_pop_for_min) in order to get all the records containing the values smaller than the current min_value (in the ram manager). fifo_manager turns it to low when a new relevant value was set to num_of_items_to_pop_for_min.
-	input [2:0] num_of_items_to_pop_for_min, // is the number of items to be pulled from the fifo queue to get all the contained value smaller than min_value, when the value is higher than 0 fifo_manager decrease its value at each pop_from_fifo command that is executed.
-	input [6*8-1:0] record_to_push  , // containing the record pushed into RAM
-	input push_to_ram, // when high signals the ram manager that it should store the record to push. 
-	input pop_from_ram, // when high in parallel turn min_valid to low (means that we don't have a valid min_record, the assumption is that the outside code allready took the value in min_record when it was valid) and start the process of min_record updating to containg the record with the next minimal key value 
-	output [6*8-1:0] min_record, //Contains the record with the min key val WHEN MIN_VALID IS HIGH!!! 
-	output  min_valid, //High when min_record contains the record with min key value
-);
-			 
-reg curr_min_record_address; // the address in the ram of the current min value record. 
-reg curr_writing_address; // the address in the ram to which we will write the next record 
 
-
-//ram_manager logic 
-
-	always @(posedge)
-	
-		if(!rst_b)
-			//init all of the inner variables
-			begin
-			
-			end
-		else
-			begin
-				//check if we have something to push to the ram
-				if(push_to_ram)
-					begin
-						//do insertion sort. setting the min_valid to false
-						min_valid <= #1 0; // when this is set to low, the push_wait in the top_module will be set to high signalling no more pushing
-						
-						// inner signal telling the ram manager to perform insertion of the value in record_to_push
-						sort_ram <= #1 1; 
-					end
-				
-				if(sort_ram)
-					begin
-						//here look where to put the record_to_push
-						
-						//... SORT LOGIC and insertion
-						
-						//if found and inserted
-						if(sort_ram_finished)
-							begin
-								min_valid <= #1 1; // we can now pop from the queue the min record is valid
-							end
-					end
-			end
-
-endmodule		 
 			 
 			 
 			 
