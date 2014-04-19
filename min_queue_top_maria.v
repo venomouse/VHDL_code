@@ -1,11 +1,5 @@
 `timescale 1ns / 1ns
 
-`define IDLE 			3'd0
-`define START_PUSH		3'd1
-`define PUSH_HEAD   	3'd2
-`define NEXT_NODE  	    3'd3
-`define POP			    3'd4
-`define PUSH_MIDDLE		3'd5
 
 module min_queue_top  #(parameter q_depth=1024, parameter ptr_wd=10) (
 	input                             clk                           , // 
@@ -48,6 +42,18 @@ module min_queue_top  #(parameter q_depth=1024, parameter ptr_wd=10) (
    // ram_manager
    // fifo_manager
    
+   wire ram_min_valid;
+   wire ram_empty;
+   
+   //temporary logic 
+   always @(posedge clk)
+		begin
+			min_valid 	<= #1 		ram_min_valid;
+			full		<= #1		1'b0;
+			push_wait	<= #1 		1'b0;
+			empty 		<= #1 		ram_empty;		
+		end
+   
    ram_manager ram_manager (
 		.clk 			(clk),
 		.rst_b			(rst_b),
@@ -55,7 +61,8 @@ module min_queue_top  #(parameter q_depth=1024, parameter ptr_wd=10) (
 		.record_to_push	(push_record),
 		.pop_from_ram	(pop),
 		.min_record 	(pop_record),
-		.min_valid		(min_valid)
+		.min_valid		(ram_min_valid),
+		.empty 			(ram_empty)
 	);
   
    
@@ -76,7 +83,7 @@ endmodule // min_queue_top
 
 // endmodule // pop_top
 
-module push_top (
+/* module push_top (
 	input                             clk                           , // The clock signal from outside
 	input                             rst_b                         , // 
 		     
@@ -95,7 +102,7 @@ module push_top (
 	output     						push_to_ram,			//boolean - whether the record is pushed to ram 
 			 );
 
-endmodule  // push_top
+endmodule  // push_top */
 			 
 			 
 			 
@@ -171,7 +178,7 @@ else begin
 	end
 	
 end
- */
+ 
 
 
 
@@ -188,7 +195,7 @@ end
   // .doutb(doutb) // output [63 : 0] doutb
 // );			 
 	 		 
-endmodule // queue_in	
+endmodule // queue_in	*/
 
 
 			 
