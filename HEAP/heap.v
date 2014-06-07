@@ -1,19 +1,182 @@
 `timescale 1 ns / 1 ns
 
-module queue#(parameter depth = 1024, parameter ptr_wd = 10)(
+
+`define HEAP_MAX_DEPTH 				10
+`define REC_WIDTH 					6*8 
+`define KEY_WIDTH 	  				4*8
+`define PL_WIDTH  					2*8
+`define STATE_HEAP_IDLE            	4'd0
+`define STATE_DOWN_HEAPIFY		   	4'd1
+`define STATE_UP_HEAPIFY		   	4'd2				
+`define STATE_COMPARE_NODES	   	   	4'd3
+`define STATE_COMPARE_TWO_NODES    	4'd4
+
+
+
+module heap_maxheapfy#(parameter heap_depth = `HEAP_NAX_DEPTH, parameter add_width = `ADD_WIDTH, parameter rec_width = `REC_WIDTH)(
 	input     			clk									,
 	input     			rst									,
-	input    			push								,
-	input    			pop									,
-	output   			full								,
+	
+	input    			push_to_heap						,  // push the record currently in the push record (commencing heapify up)
+	input    			pop_from_heap						,  // pop the record from the heap (commencing heapify down)
 	output    			empty								,
 	output reg   		min_valid							,
-	output reg   		[6*8-1:0] Q_top						,
-	input     			[6*8-1:0] push_record				,
-	output    			[6*8-1:0] pop_record
+	output reg   		[rec_width-1:0] heap_root			,
+	input     			[rec_width-1:0] push_record			,
+	output    			[rec_width-1:0] pop_record			,
 		);
- 
-	wire cs_a, cs_b, rnw_a, rnw_b;
+	
+	
+	reg [3:0] heap_state; 	//register containing the heap machine state
+
+	wire cs_a, cs_b, rnw_a, rnw_b; 											// memory commands
+	wire [rec_width-1 : 0] a_data_out, b_data_out, a_data_in, b_data_in;	// memory inputs and outputs
+	reg  [heap_depth-1 :  0] parent_node_add,left_node_add, right_node_add;	// this wires are driven by the value of the register node_add
+	reg  [add_width-1 :  0] last_node_add;									//containing the address of the last node (the available node)
+	reg  [add_width-1 :  0] node_add;										//containing the address of the node 
+	reg  [add_width-1 :  0] curr_node_add;              					//containing the current address of the push_record (used in the bubble process)
+	
+
+	
+	// **** cs_a assigment (when is should be true) ***//
+	
+	// decision lines for the the states //
+	
+	//decision lines for memory//
+	assign should_read_a (cs_a == 1'b1) && (rnw_a == 1'b1);
+	assign should_read_b (cs_b == 1'b1) && (rnw_b == 1'b1);
+	
+	always @(posedge_clk)
+		if(!rst)
+			begin
+				// *** init all the regs with zeros ***//
+				last_node <= #1 0;
+				parent_node_add <= #1 0;
+				curr_node_add <= #1 0;
+				node_add <= #1 0;
+				wait_for_ram  <= #1 0;
+				heap_state <= #1 `STATE_HEAP_IDLE; // setting the heap state to zero
+			end
+		else 
+			// deal with reading from memory
+			read_valid_a <= #1 should_read_a;
+			read_valid_b <= #1 should_read_b;
+			
+			if(read_valid_a)
+				a_data_out <= #1 a_data_out_real;
+				
+			if(read_valid_b)
+				b_data_out <= #1 b_data_out_real;
+				
+			case(heap_state)  // this should translate to a mux with 5 entries
+			`STATE_HEAP_IDLE:
+				begin					
+					//not a lot to do here beside of checking if a push command was set
+					if (push_to_heap)
+						begin
+							
+							last_node_add <= #1 last_node_add + 1; // increasing the last node available address by 1
+							min_valid <= #1 0;
+							heap_state <= #1 `STATE_UP_HEAPIFY; // change the state to up heapify
+						end
+					else if(pop_from_heap)
+						begin
+							//change the state to 
+							last_node_add <= #last_node_add - 1;
+							min_valid <= #1 0;
+							heap_state <= #1 `STATE_DOWN_HEAPIFY;
+						end
+					else
+						begin
+							min_valid <= #1 1;
+						end
+				end
+			`STATE_UP_HEAPIFY:
+				begin
+					
+					//check if we have a parent node to compare with
+					if (last_node_add == 1) 
+						begin
+							// *** setting the memory to write in address 
+						end
+					else
+						begin
+							if (curr_node_add != 1) 
+								begin
+									
+								end
+							else
+								begin
+									//the push_record_key is in the top node. we can return to idle
+									heap_state <= #1 `STATE_HEAP_IDLE;
+									min_valid <= #1 1;
+								end
+						end
+					
+				end
+			`STATE_COMPARE_NODES:
+				begin
+					//checking the node_key  (later check it by the decision line)
+					if (node_key > push_record_key)
+						begin
+							//if we are here a switch is needed. The switch is performed by setting the memory.
+							
+							curr_node_add <= #1 node_add;         //when we switch we have to update the curr_node_add address
+							heap_state <= #  1 `STATE_UP_HEAPIFY; // changing the state back to up_heapify, where we 
+						end
+					else
+						begin
+							//no switch is needed
+							heap_state <= #1 `STATE_HEAP_IDLE;
+							min_valid <= # 1 1;
+						end
+				end
+				
+			`STATE_DOWN_HEAPIFY:
+				begin
+					//peform use the two ports to write the value to each address
+					
+					//go back to state_up_heapfiy
+				end
+			
+			`STATE_COMPARE_TWO_NODES:
+				begin
+					//peform use the two ports to write the value to each address
+					
+					//go back to state_up_heapfiy
+				end
+			end	
+			  
+	tdp_ram #(rec_width,add_wd) ram(
+				.clk			(!clk			), // so the command would occure in the same cycle. 
+				
+				.cs_a			(cs_a			),
+				.rnw_a			(rnw_a			), 
+				.a_add			(a_add			),
+				.a_data_in		(a_data_in		),
+				.a_data_out		(a_data_out		),
+					 
+				.cs_b			(cs_b			),
+				.rnw_b			(rnw_b			),
+				.b_add			(b_add			),
+				.b_data_in		(b_data_in		),
+				.b_data_out		(b_data_out		)
+								);
+								
+	task adjust_pointers;
+		input [log_tree_size-1:0]  new_pointer_value;
+	
+		begin
+			pointer <= #1 new_pointer_value;
+			parent_pointer <= #1 parent(new_pointer_value); 
+			parent_parent_pointer  <= #1 parent(parent(new_pointer_value));
+			three_parent_pointer  <= #1 parent(parent(parent(new_pointer_value))); 
+			left_child_pointer <= #1 { new_pointer_value[log_tree_size-1:0], 1'b1 };
+			right_child_pointer <= #1 { new_pointer_value[log_tree_size-1:0], 1'b0 } + 2;
+		end
+	endtask
+	
+
 	wire heapify, swap, swap_up, swap_right, swap_left;
 	wire [ptr_wd-1:0] heap_idx1, heap_idx2, idx_down1, idx_down2;
 	wire [ptr_wd-1:0] a_add, b_add;
@@ -205,20 +368,7 @@ module queue#(parameter depth = 1024, parameter ptr_wd = 10)(
 							(right_idx >= last_idx))&& heapify_down && !rd_cyc;
 
 
-	tdp_ram_48w_1024_coregen ram(
-						.clk			(clk			),
-						.cs_a			(cs_a			),
-						.rnw_a			(rnw_a			), 
-						.a_add			(a_add			),
-						.a_data_in		(a_data_in		),
-						.a_data_out		(a_data_out		),
-							 
-						.cs_b			(cs_b			),
-						.rnw_b			(rnw_b			),
-						.b_add			(b_add			),
-						.b_data_in		(b_data_in		),
-						.b_data_out		(b_data_out		)
-										);
+
 
 										  
 
